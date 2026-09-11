@@ -44,14 +44,6 @@ The unified equivalence factor (**$278\times$**) is derived from three physical 
 
 $$\mathbf{1 \text{ SPU}} \approx \underbrace{18 \text{ temporal relaxation steps}}_{\text{Temporal Depth}} \times \underbrace{5 \text{ equivalent MLP layers}}_{\text{Dendritic Non-linearity}} \times \underbrace{3.09 \text{ active MoDE paths}}_{\text{Dynamic Routing}} \approx \mathbf{278 \text{ Equivalent Static Parameters}}$$
 
-### Standardized Model Scale Matrix
-
-| Model Instance | Physical Neurons | Total SPUs (x64) | LLM Reasoning Equivalence (**x278**) | RAM Footprint | Target Platform |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Micro-Benchmark** | 50,000 (50k) | 3.2 Million | **~890M** | 12.8 MB | Embedded / Mobile CPU |
-| **Test Prototype** | 250,000 (250k) | 16 Million | **~4.45B** | 64.0 MB | GitHub Codespaces (2 vCPU) |
-| **Arysu / Amelia** | 50,000,000 (50M) | 3.2 Billion | **~892B** | 12.8 GB | Radxa ROCK (SBC @ 200 Hz) |
-| **Lyra Futakuchi** | 1,000,000,000 (1B) | 64.0 Billion | **~17.8 Trillion** | 256.0 GB | Home Server (EPYC Octa-ch @ 100 Hz) |
 
 ---
 
