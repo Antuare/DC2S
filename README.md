@@ -36,7 +36,7 @@ $$\text{SPU} = \text{PU} \times \left( \frac{\text{MoDE Variants (16)}}{\text{Pr
 
 ---
 
-## Unified LLM Parameter Equivalence ($278\times$)
+## Dynamic Operational Density Equivalence "DODE" ($278\times$)
 
 Because an SPU is an active, stateful, in-memory computing node executing across time, **1 SPU is not equivalent to a single static scalar float**. 
 
