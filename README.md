@@ -50,7 +50,7 @@ $$\mathbf{1 \text{ SPU}} \approx \underbrace{18 \text{ temporal relaxation steps
 ## Authors & Credits
 
 * **Principal Architect & Lead Designer:** **Teufel**  
-  *Conceived the theoretical framework, biophysical mechanisms, mathematical formulations, structural design, and core systems architecture.*
+  *Core system architecture, biophysical framework, and mathematical design*
 * **Theoretical & Conceptual Brainstorming Assistant:** **Gemini 3.8 Flash**  
   *Served strictly as a sounding board and conceptual brainstorming partner for theoretical validation. Did not author or implement source code.*
 
