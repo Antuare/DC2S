@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you reference this architecture or use this software in your research, please cite it as below."
+title: "DC2S-V3: Dendritic Cross-Compartmental Stellar Sparsing"
+abstract: "A tokenless neuromorphic Spiking Neural Network (SNN) architecture featuring hierarchical multi-compartmental stellate neurons, 15-state MoDE dynamic routing, and ALIF somas, enabling ultra-sparse continuous attractor dynamics on standard CPU hardware."
+authors:
+  - family-names: "Teufel"
+    alias: "Teufel"
+version: "3.0.0"
+date-released: "2026-09-11"
+license: "GPL-3.0"
+repository-code: "https://github.com/Antuare/DC2S-V3"
+keywords:
+  - "neuromorphic-computing"
+  - "spiking-neural-networks"
+  - "snn"
+  - "dendritic-computation"
+  - "mode-routing"
+  - "continuous-attractor"
+  - "odin-lang"
+  - "tokenless-ai"
+  - "alif-neurons"
