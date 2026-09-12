@@ -1,4 +1,4 @@
-# DC2S-V3: Dendritic Cross-Compartmental Stellar Sparsing
+# DC2S: Dendritic Cross-Compartmental Stellar Sparsing
 
 **DC2S v3 (Dendritic Cross-Compartmental Stellar Sparsing)** is a tokenless neuromorphic Spiking Neural Network (SNN) architecture featuring hierarchical multi-compartmental stellate neurons, 15-state Mixture of Dendritic Experts (MoDE) dynamic routing, and Adaptive Leaky Integrate-and-Fire (ALIF) somas. It enables ultra-sparse (0.25%), continuous attractor dynamics and online three-factor plasticity for real-time, low-latency embodied cognition on standard CPU hardware.
 
