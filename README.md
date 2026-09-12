@@ -32,7 +32,7 @@ Integrates the dynamic structural multiplexing capacity of the 15-state MoDE byp
 
 $$\text{SPU} = \text{PU} \times \left( \frac{\text{MoDE Variants (16)}}{\text{Primary Trees (8)}} \right) = 32 \times 2 = \mathbf{64 \text{ SPU / neuron}}$$
 
-* *The 16/8 ratio ($= 2$)* mathematically reflects the physical **2:1 compression ratio** of the MoDE bypass mechanism.
+* *The 16/8 ratio (= 2)* mathematically reflects the physical **2:1 compression ratio** of the MoDE bypass mechanism.
 
 ---
 
