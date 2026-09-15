@@ -68,3 +68,80 @@ Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
 	prng_seed:              u16,    // Semilla PRNG local (Xorshift16 determinista) (2B)
 }
 
+// 
+Network :: struct {
+	neurons:         []Neuron,
+	base_ptr:        uintptr,
+	total_neurons:   int,
+	active_indices:  [dynamic]int,
+	current_tick:    u32,
+	target_sparsity: f32,
+}
+
+// Memory-address addressing: Retorna el índice relativo sin guardar IDs
+// size_of(Neuron) es 192. LLVM lo compila como multiplicación inversa (0 costo de división).
+neuron_index_from_ptr :: #force_inline proc(net: ^Network, n_ptr: ^Neuron) -> int {
+	return int((uintptr(n_ptr) - net.base_ptr) / size_of(Neuron))
+}
+
+init_network :: proc(neuron_count: int, sparsity: f32 = 0.0025) -> ^Network {
+	net := new(Network)
+	net.total_neurons   = neuron_count
+	net.target_sparsity = sparsity
+	net.current_tick    = 0
+	
+	// Buffer dinámico para rastrear las neuronas activas en cada tick (evita recorrer las 250k enteras)
+	initial_capacity := int(f32(neuron_count) * sparsity * 2)
+	net.active_indices = make([dynamic]int, 0, initial_capacity)
+
+	// Reserva contigua y alineada a 64 bytes para todas las neuronas
+	total_bytes := neuron_count * size_of(Neuron)
+	raw_mem, err := mem.alloc(total_bytes, 64)
+	if err != nil {
+		fmt.panicf("Error al reservar memoria para la red: %v", err)
+	}
+
+	net.neurons  = mem.slice_ptr(cast(^Neuron)raw_mem, neuron_count)
+	net.base_ptr = uintptr(raw_mem)
+
+	// Inicialización biológica basal en enteros (INT16 / INT4)
+	for i in 0..<neuron_count {
+		n := &net.neurons[i]
+
+		// 1. SOMA & ALIF (Calibrado para que 15 sea el 22% de 68)
+		n.v_membrane             = 0    // Potencial de reposo en 0
+		n.v_threshold            = 68   // Umbral de disparo base (15 / 68 ≈ 22%)
+		n.histeresis             = 0    // Canal frío al arrancar
+		n.refractario            = 0    // Sin bloqueo inicial
+
+		// 2. Interneuronas (Apagadas por defecto, esperando Top-Down)
+		n.gating_somatic         = 0    // SST+ inactivo
+		n.gating_context         = 0    // VIP+ inactivo
+
+		// 3. Info Soma
+		n.nmda_latch             = 0
+		n.t_last                 = 0
+		n.t_prev                 = 0
+		n.calcium_trace          = 0
+		n.frequency_homeostasis  = 0
+		n.axon_delay_exc         = 1    // 1 tick de delay basal
+		n.axon_delay_inh         = 1
+		n.axon_delay_desinh      = 1
+
+		// 8. STP Tsodyks-Markram (Coma fija de 16 bits)
+		n.stp_u                  = 13107 // Utilización basal U0 = ~0.20 (20% de 65535)
+		n.stp_r                  = 65535 // Depósito lleno al 100% de recursos
+		n.stp_tau_fac            = 15    // Decaimiento rápido de facilitación
+		n.stp_tau_rec            = 40    // Recuperación moderada de vesículas
+		n.stp_u0                 = 51    // 20% en escala de 8 bits (255 * 0.20)
+
+		// 9. Extras & Metaplasticidad
+		n.bitfield               = 0
+		n.plasticity_fractional  = 0
+		n.bcm_threshold          = 1000  // Umbral BCM inicial
+		// La semilla no puede ser 0 para Xorshift16; le damos una distinta a cada una:
+		n.prng_seed              = u16((i * 31337 + 1) & 0xFFFF)
+	}
+
+	return net
+}
