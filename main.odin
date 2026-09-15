@@ -4,27 +4,6 @@ import "core:fmt"
 import "core:mem"
 
 // =============================================================================
-// DC2S-V3: ARCHITECTURAL CONSTANTS & TOPOLOGY
-// =============================================================================
-
-NEURON_SIZE_BYTES       :: 256
-CACHE_LINE_ALIGNMENT    :: 64
-
-PRIMARY_TREES           :: 8   // Direct inputs to the ALIF soma
-SECONDARY_DENDRITES     :: 16  // Intermediate dendritic integration
-HEADLESS_PAIRS          :: 16  // 32 coincidence heads (16 pairs)
-MOORE_NEIGHBORS         :: 8   // 2D Moore neighborhood surrounding cells
-
-EXCITATORY_SYNAPSES     :: 128 // 4 afferents per headless pair (128 / 32 = 4)
-INHIBITORY_SYNAPSES     :: 32  // SST+ clamp connections
-DISINHIBITORY_SYNAPSES  :: 8   // VIP+ disinhibitory lines
-
-// Structural Processing Units
-PU_PER_NEURON           :: (EXCITATORY_SYNAPSES * PRIMARY_TREES) / 32 // 32 PU
-SPU_PER_NEURON          :: PU_PER_NEURON * (16 / PRIMARY_TREES)       // 64 SPU
-LLM_EQUIVALENCE_FACTOR  :: 278                                        // Unified reasoning multiplier
-
-// =============================================================================
 // NEURON STRUCTURE (Exactly 256 Bytes, aligned to 64-byte boundary)
 // =============================================================================
 
