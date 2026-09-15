@@ -2,10 +2,13 @@ package main
 
 import "core:fmt"
 import "core:mem"
+import "core:time"
 
 CACHE_LINE_ALIGNMENT :: 64
 
-// [Struct Of a Neuron] — 
+// =============================================================================
+// ESTRUCTURA DE LA NEURONA (192 Bytes Exactos)
+// =============================================================================
 Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
 	// --- 1. Soma & ALIF Dynamic State (7 Bytes) ---
 	v_membrane:             i16,    // Voltaje de membrana (2B)
@@ -38,12 +41,11 @@ Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
 	axons_desinh:           [4]u8,  // 8 Axones desinhibidores (8 pesos @ 4 bits) (4B)
 
 	// --- 5. Árbol Dendrítico (48 Bytes) ---
-	// (Nota: Las 32 Dendritas Head son 0 Bytes / Stateless)
 	dendrites_sec:          [16]u8, // 16 Dendritas secundarias (16B)
 	dendrites_prim:         [8]u8,  // 8 Dendritas primarias (8B)
 	gating_dendritic:       [24]u8, // 24 Gating dendrítico (24B)
 
-	// --- 6. Dendritas MoDE — Mixture of Dendritic Experts (12 Bytes) ---
+	// --- 6. Dendritas MoDE (12 Bytes) ---
 	dendrites_mode:         [4]u8,  // 4 Dendritas MoDE (4B)
 	gating_mode:            [4]u8,  // 4 Gating MoDE (4B)
 	routers_som:            [4]u8,  // 4 Enrutadores (SOM+) (4B)
@@ -68,7 +70,9 @@ Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
 	prng_seed:              u16,    // Semilla PRNG local (Xorshift16 determinista) (2B)
 }
 
-// 
+// =============================================================================
+// CONTENEDOR DE RED
+// =============================================================================
 Network :: struct {
 	neurons:         []Neuron,
 	base_ptr:        uintptr,
@@ -78,23 +82,21 @@ Network :: struct {
 	target_sparsity: f32,
 }
 
-// Memory-address addressing: Retorna el índice relativo sin guardar IDs
-// size_of(Neuron) es 192. LLVM lo compila como multiplicación inversa (0 costo de división).
+// Cálculo de índice relativo mediante aritmética de punteros en memoria
 neuron_index_from_ptr :: #force_inline proc(net: ^Network, n_ptr: ^Neuron) -> int {
 	return int((uintptr(n_ptr) - net.base_ptr) / size_of(Neuron))
 }
 
+// Inicialización de la memoria contigua de la red
 init_network :: proc(neuron_count: int, sparsity: f32 = 0.0025) -> ^Network {
 	net := new(Network)
 	net.total_neurons   = neuron_count
 	net.target_sparsity = sparsity
 	net.current_tick    = 0
-	
-	// Buffer dinámico para rastrear las neuronas activas en cada tick (evita recorrer las 250k enteras)
+
 	initial_capacity := int(f32(neuron_count) * sparsity * 2)
 	net.active_indices = make([dynamic]int, 0, initial_capacity)
 
-	// Reserva contigua y alineada a 64 bytes para todas las neuronas
 	total_bytes := neuron_count * size_of(Neuron)
 	raw_mem, err := mem.alloc(total_bytes, 64)
 	if err != nil {
@@ -104,44 +106,164 @@ init_network :: proc(neuron_count: int, sparsity: f32 = 0.0025) -> ^Network {
 	net.neurons  = mem.slice_ptr(cast(^Neuron)raw_mem, neuron_count)
 	net.base_ptr = uintptr(raw_mem)
 
-	// Inicialización biológica basal en enteros (INT16 / INT4)
+	// Inicialización basal
 	for i in 0..<neuron_count {
 		n := &net.neurons[i]
 
-		// 1. SOMA & ALIF (Calibrado para que 15 sea el 22% de 68)
-		n.v_membrane             = 0    // Potencial de reposo en 0
-		n.v_threshold            = 68   // Umbral de disparo base (15 / 68 ≈ 22%)
-		n.histeresis             = 0    // Canal frío al arrancar
-		n.refractario            = 0    // Sin bloqueo inicial
+		n.v_membrane             = 0
+		n.v_threshold            = 68   // 15 es ~22% de 68
+		n.histeresis             = 0
+		n.refractario            = 0
 
-		// 2. Interneuronas (Apagadas por defecto, esperando Top-Down)
-		n.gating_somatic         = 0    // SST+ inactivo
-		n.gating_context         = 0    // VIP+ inactivo
-
-		// 3. Info Soma
+		n.gating_somatic         = 0
+		n.gating_context         = 0
 		n.nmda_latch             = 0
 		n.t_last                 = 0
 		n.t_prev                 = 0
 		n.calcium_trace          = 0
 		n.frequency_homeostasis  = 0
-		n.axon_delay_exc         = 1    // 1 tick de delay basal
+		n.axon_delay_exc         = 1
 		n.axon_delay_inh         = 1
 		n.axon_delay_desinh      = 1
 
-		// 8. STP Tsodyks-Markram (Coma fija de 16 bits)
-		n.stp_u                  = 13107 // Utilización basal U0 = ~0.20 (20% de 65535)
-		n.stp_r                  = 65535 // Depósito lleno al 100% de recursos
-		n.stp_tau_fac            = 15    // Decaimiento rápido de facilitación
-		n.stp_tau_rec            = 40    // Recuperación moderada de vesículas
-		n.stp_u0                 = 51    // 20% en escala de 8 bits (255 * 0.20)
+		// Habilitar las compuertas dendríticas primarias para paso de señal
+		for d in 0..<8 {
+			n.gating_dendritic[d] = 1
+		}
 
-		// 9. Extras & Metaplasticidad
+		// Pesos iniciales INT4: cargamos las primeras 8 conexiones espaciales con fuerza máxima (15)
+		// Dos pesos por byte: 0xFF = dos conexiones con peso 15
+		n.axons_exc[0] = 0xFF 
+		n.axons_exc[1] = 0xFF 
+		n.axons_exc[2] = 0xFF 
+		n.axons_exc[3] = 0xFF 
+
+		// STP Tsodyks-Markram
+		n.stp_u                  = 13107 // U0 = 20%
+		n.stp_r                  = 65535 // Depósito al 100%
+		n.stp_tau_fac            = 15
+		n.stp_tau_rec            = 40
+		n.stp_u0                 = 51
+
 		n.bitfield               = 0
 		n.plasticity_fractional  = 0
-		n.bcm_threshold          = 1000  // Umbral BCM inicial
-		// La semilla no puede ser 0 para Xorshift16; le damos una distinta a cada una:
+		n.bcm_threshold          = 1000
 		n.prng_seed              = u16((i * 31337 + 1) & 0xFFFF)
 	}
 
 	return net
+}
+
+destroy_network :: proc(net: ^Network) {
+	if net == nil do return
+	delete(net.active_indices)
+	mem.free(rawptr(net.base_ptr))
+	free(net)
+}
+
+// -----------------------------------------------------------------------------
+// INYECCIÓN DE ESTÍMULO (El Rayo que entra por Z = 0)
+// -----------------------------------------------------------------------------
+inject_input_pulse :: proc(net: ^Network, center_x, center_y: int, radius: int) {
+	injected_count := 0
+
+	for dx := -radius; dx <= radius; dx++ {
+		for dy := -radius; dy <= radius; dy++ {
+			x := center_x + dx
+			y := center_y + dy
+
+			if x >= 0 && x < GRID_DIM_X && y >= 0 && y < GRID_DIM_Y {
+				// Inyectamos en la cara de entrada Z = 0
+				idx := coord_to_index(x, y, 0)
+				n := &net.neurons[idx]
+
+				// Rompemos el umbral intencionalmente para forzar el disparo inicial
+				n.v_membrane = n.v_threshold + 10
+				append(&net.active_indices, idx)
+				injected_count += 1
+			}
+		}
+	}
+
+	fmt.printf("Descarga inyectada en Z=0: %d neuronas activadas como frente de onda.\n", injected_count)
+}
+
+// =============================================================================
+// MAIN: PUNTO DE ENTRADA Y BENCHMARK REAL
+// =============================================================================
+main :: proc() {
+	fmt.println("==================================================")
+	fmt.println("       INICIALIZANDO MOTOR DC2S — NoTA           ")
+	fmt.println("==================================================")
+
+	NUM_NEURONS :: 250_000
+	fmt.printf("[*] Struct Neuron: %d Bytes (Exacto)\n", size_of(Neuron))
+	fmt.printf("[*] Instanciando red de %d neuronas en memoria...\n", NUM_NEURONS)
+
+	start_mem := time.now()
+	net := init_network(NUM_NEURONS)
+	defer destroy_network(net)
+
+	mem_mb := f32(net.total_neurons * size_of(Neuron)) / (1024.0 * 1024.0)
+	fmt.printf("[+] Red instanciada en %.2f ms\n", time.duration_milliseconds(time.since(start_mem)))
+	fmt.printf("[+] Memoria física: %.2f MB contiguos en RAM\n", mem_mb)
+
+	// 1. Construir la topología 3D de Iris (50 x 50 x 100)
+	build_iris_3d_grid(net)
+
+	// 2. Disparar el Rayo en el centro de la cara de entrada (X=25, Y=25, Z=0)
+	fmt.println("\n--- DISPARANDO TRUENO EXPERIMENTAL ---")
+	inject_input_pulse(net, 25, 25, radius = 2)
+
+	// 3. Ejecutar 40 ticks a través de loop.odin y medir la propagación
+	TOTAL_TICKS :: 40
+	fmt.Printf("\n[*] Simulando %d Ticks a través de loop.odin (Bi-Wave)...\n", TOTAL_TICKS)
+	fmt.println("----------------------------------------------------------------------")
+	fmt.println(" Tick | Activas | Esparsidad | Profundidad Máx (Z) | Estado de Onda  ")
+	fmt.println("----------------------------------------------------------------------")
+
+	start_sim := time.now()
+	max_z_reached := 0
+
+	for t in 1..=TOTAL_TICKS {
+		step_network(net)
+
+		active_count := len(net.active_indices)
+		sparsity_pct := (f32(active_count) / f32(net.total_neurons)) * 100.0
+
+		// Encontrar la profundidad máxima en Z alcanzada por la onda en este tick
+		current_max_z := 0
+		for idx in net.active_indices {
+			_, _, z := index_to_coord(idx)
+			if z > current_max_z do current_max_z = z
+		}
+		if current_max_z > max_z_reached do max_z_reached = current_max_z
+
+		// Diagnóstico del estado del rayo
+		status := "Propagando..."
+		if current_max_z == GRID_DIM_Z - 1 {
+			status = "¡IMPACTO EN TIERRA (Z=99)!"
+		} else if active_count == 0 {
+			status = "Onda Disipada (Fin)"
+		}
+
+		fmt.printf(" %4d | %7d | %9.3f%% |       Z = %3d       | %s\n", 
+			t, active_count, sparsity_pct, max_z_reached, status)
+
+		// Si la energía se disipó por completo, terminamos la simulación
+		if active_count == 0 do break
+	}
+
+	sim_duration := time.since(start_sim)
+	fmt.println("----------------------------------------------------------------------")
+	fmt.printf("[✓] Simulación completada en: %.2f ms de tiempo real de CPU\n", time.duration_milliseconds(sim_duration))
+	fmt.printf("[+] Profundidad máxima alcanzada: Capa Z = %d / %d\n", max_z_reached, GRID_DIM_Z - 1)
+	
+	if max_z_reached >= GRID_DIM_Z - 1 {
+		fmt.println("La onda cruzó el bloque 3D de extremo a extremo!")
+	} else {
+		fmt.println("[!] La onda se mitigó en el interior.")
+	}
+
+	fmt.println("==================================================")
 }
