@@ -4,52 +4,6 @@ import "core:fmt"
 import "core:mem"
 
 // =============================================================================
-// NEURON STRUCTURE (Exactly 256 Bytes, aligned to 64-byte boundary)
-// =============================================================================
-
-Neuron :: struct #align(CACHE_LINE_ALIGNMENT) {
-	// --- 1. Soma & ALIF Dynamic State (28 bytes) ---
-	v_membrane:        f32,  // Current membrane potential
-	v_threshold:       f32,  // Adaptive firing threshold
-	threshold_adapt:   f32,  // Adaptation decay variable
-	last_spike:        u32,  // Timestamp of the most recent spike (tick)
-	penultimate_spike: u32,  // Timestamp of the second-to-last spike (T-STDP)
-	eligibility_trace: f32,  // Temporal credit assignment trace
-	flags:             u32,  // Bitmask: Bit 0 = Sleep Tag (RAG Cognitivo), Bit 1 = Active
-
-	// --- 2. Dendritic Tree Compartments (80 bytes) ---
-	primary_trees:       [PRIMARY_TREES]f32,       // 8 * 4 = 32 bytes (Soma convergence)
-	secondary_dendrites: [SECONDARY_DENDRITES]f16, // 16 * 2 = 32 bytes (Intermediate charge)
-	headless_pairs:      [HEADLESS_PAIRS]u8,       // 16 bytes (Coincidence detection states)
-
-	// --- 3. Interneurons & MoDE Dynamic Gating (16 bytes) ---
-	mode_state:          u8,    // 15 MoDE active bypass states (0 = pass-through)
-	som_router:          [4]u8, // 4 bytes (4 paths of 1 byte each)
-	interneuron_pad:     [3]u8, // Alignment padding
-	sst_inhibition:      f32,   // SST+ localized clamping force
-	vip_topdown:         f32,   // VIP+ top-down disinhibitory signal
-
-	// --- 4. Plasticity & Homeostasis (20 bytes) ---
-	t_stdp_soma:         f32,    // Triplet-STDP trace for the soma
-	t_stdp_dendrite:     f32,    // Local branch-level T-STDP trace
-	homeostasis_soma:    f32,    // Target firing rate regulator
-	homeostasis_mode:    [4]f16, // 8 bytes: Branch utilization regulator
-
-	// --- 5. Packed Synaptic Conductances (84 bytes, 4-bit nibbles) ---
-	synapses_excitatory:    [EXCITATORY_SYNAPSES / 2]u8,    // 64 bytes (128 weights)
-	synapses_inhibitory:    [INHIBITORY_SYNAPSES / 2]u8,    // 16 bytes (32 weights)
-	synapses_disinhibitory: [DISINHIBITORY_SYNAPSES / 2]u8, // 4 bytes (8 weights)
-
-	// --- 6. Moore Neighborhood & Cache Line Seal (28 bytes) ---
-	moore_neighbors: [MOORE_NEIGHBORS]i16, // 16 bytes (Relative spatial offsets in grid)
-	_reserved:       [12]u8,               // 12 bytes (Seals struct at exactly 256 bytes)
-}
-
-// Compile-time static assertions ensuring physical hardware alignment
-#assert(size_of(Neuron) == NEURON_SIZE_BYTES, "CRITICAL: Neuron size must be exactly 256 bytes!")
-#assert(align_of(Neuron) == CACHE_LINE_ALIGNMENT, "CRITICAL: Neuron must align to 64 bytes!")
-
-// =============================================================================
 // NETWORK SYSTEM CONTAINER
 // =============================================================================
 
