@@ -14,36 +14,6 @@
 * **Cognitive Dynamics:** Two-wave predictive settlement (Wave 1 feedforward sweep + Wave 2 recurrent top-down convergence + Wave 3 residual consolidation).
 * **Tri-Phasic Offline Sleep:** Synaptic maintenance and homeostatic downscaling through three explicit phases: *Visualization* (replay) $\rightarrow$ *Consolidation* (Cognitive RAG & synaptic tagging) $\rightarrow$ *Cryogenesis* (standby freeze).
 
----
-
-## Computational Metrics: PU & SPU Foundations
-
-DC2S rejects traditional FLOPS and simplistic SOPS (Synaptic Operations Per Second) in favor of in-memory structural processing units:
-
-### 1. Processing Units (PU)
-Measures the baseline linear integration and coincidence detection across the primary dendritic trunks:
-
-$$\text{PU} = \frac{\text{Synaptic Connections (128)} \times \text{Primary Dendritic Trees (8)}}{\text{Normalization Divisor (32)}} = \mathbf{32 \text{ PU / neuron}}$$
-
-* *The normalization divisor (32)* corresponds to the 32 paired headless coincidence detector inputs ($128 / 32 = 4$ direct afferent axons per head).
-
-### 2. Sub-Processing Units (SPU)
-Integrates the dynamic structural multiplexing capacity of the 15-state MoDE bypasses over the primary trees:
-
-$$\text{SPU} = \text{PU} \times \left( \frac{\text{MoDE Variants (16)}}{\text{Primary Trees (8)}} \right) = 32 \times 2 = \mathbf{64 \text{ SPU / neuron}}$$
-
-* *The 16/8 ratio (= 2)* mathematically reflects the physical **2:1 compression ratio** of the MoDE bypass mechanism.
-
----
-
-## Dynamic Operational Density Equivalence "DODE" ($278\times$)
-
-Because an SPU is an active, stateful, in-memory computing node executing across time, **1 SPU is not equivalent to a single static scalar float**. 
-
-The unified equivalence factor (**$278\times$**) is derived from three physical dimensions of runtime compute density:
-
-$$\mathbf{1 \text{ SPU}} \approx \underbrace{18 \text{ temporal relaxation steps}}_{\text{Temporal Depth}} \times \underbrace{5 \text{ equivalent MLP layers}}_{\text{Dendritic Non-linearity}} \times \underbrace{3.09 \text{ active MoDE paths}}_{\text{Dynamic Routing}} \approx \mathbf{278 \text{ Equivalent Static Parameters}}$$
-
 
 ---
 
