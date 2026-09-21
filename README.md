@@ -1,14 +1,13 @@
 # DC2S: Dendritic Cross-Compartmental Stellar Sparsing
 
-**DC2S v3 (Dendritic Cross-Compartmental Stellar Sparsing)** is a tokenless neuromorphic Spiking Neural Network (SNN) architecture featuring hierarchical multi-compartmental stellate neurons, 15-state Mixture of Dendritic Experts (MoDE) dynamic routing, and Adaptive Leaky Integrate-and-Fire (ALIF) somas. It enables ultra-sparse (0.25%), continuous attractor dynamics and online three-factor plasticity for real-time, low-latency embodied cognition on standard CPU hardware.
+**DC2S  (Dendritic Cross-Compartmental Stellar Sparsing)** is a Spiking Neural Network (SNN) architecture featuring hierarchical multi-compartmental stellate neurons, dynamic routing, and Adaptive Leaky Integrate-and-Fire (ALIF) somas. It enables ultra-sparse (0.25%), continuous attractor dynamics and online three-factor plasticity for real-time, low-latency embodied cognition on standard CPU hardware.
 
 ---
 
 ## Architectural Highlights
 
-* **Tokenless & Continuous:** Eliminates discrete tokenization and static matrix multiplications. Information is processed as continuous spatio-temporal spike trains directly mapped to bytes.
+* **Continuous:** Information is processed as continuous spatio-temporal spike trains directly mapped to bytes.
 * **Hierarchical Dendritic Tree:** Structured binary dendritic cascade per neuron: 32 paired headless coincidence detectors $\rightarrow$ 16 secondary dendrites $\rightarrow$ 8 primary branches $\rightarrow$ ALIF soma.
-* **15-State MoDE (Mixture of Dendritic Experts):** Local structural multiplexing featuring dynamic 2:1 bypasses governed by disinhibitory microcircuits (VIP+ / SOM+ / SST+), altering physical dendritic pathways in sub-millisecond regimes.
 * **Ultra-Sparse Execution:** Strict **0.25% runtime sparsity** constrained by 2D Moore neighborhoods (9 functional cells per micro-cluster).
 * **Hardware-Aligned (Data-Oriented Design):** Implemented in **Odin** for host CPU RAM. Each neuron occupies exactly **256 Bytes** (perfectly aligned to 4 $\times$ 64-byte cache lines), keeping active wavefronts entirely inside L2/L3 CPU cache.
 * **Cognitive Dynamics:** Two-wave predictive settlement (Wave 1 feedforward sweep + Wave 2 recurrent top-down convergence + Wave 3 residual consolidation).
