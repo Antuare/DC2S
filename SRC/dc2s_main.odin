@@ -14,7 +14,7 @@ CACHE_LINE_ALIGNMENT :: 64
 // =============================================================================
 // ESTRUCTURA DE LA NEURONA (192 Bytes Exactos) - INTACTA
 // =============================================================================
-Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
+Neuron :: struct #align(CACHE_LINE_ALIGNMENT) {
 	// --- 1. Soma & ALIF Dynamic State (7 Bytes) ---
 	v_membrane:             i16,    // Voltaje de membrana (2B)
 	v_threshold:            i16,    // Umbral adaptativo (2B)
