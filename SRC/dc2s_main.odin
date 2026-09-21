@@ -1,13 +1,18 @@
 package main
 
 import "core:fmt"
+import "core:math"
+import "core:math/bits"
+import "core:math/linalg"
 import "core:mem"
+import virtual "core:mem/virtual"
 import "core:time"
+import ecs "odecs" // Busca la carpeta "odecs" relativa a main.odin
 
 CACHE_LINE_ALIGNMENT :: 64
 
 // =============================================================================
-// ESTRUCTURA DE LA NEURONA (192 Bytes Exactos)
+// ESTRUCTURA DE LA NEURONA (192 Bytes Exactos) - INTACTA
 // =============================================================================
 Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
 	// --- 1. Soma & ALIF Dynamic State (7 Bytes) ---
@@ -70,9 +75,114 @@ Neuron :: struct #packed #align(CACHE_LINE_ALIGNMENT) {
 	prng_seed:              u16,    // Semilla PRNG local (Xorshift16 determinista) (2B)
 }
 
+// Comprobaciones estrictas en tiempo de compilación
+#assert(size_of(Neuron) == 192, "Error: Neuron debe medir exactamente 192 bytes")
+#assert(align_of(Neuron) == CACHE_LINE_ALIGNMENT, "Error: Neuron debe estar alineada a 64 bytes")
+
 // =============================================================================
-// CONTENEDOR DE RED
+// GESTIÓN DE MEMORIA VIRTUAL & ID POR POSICIÓN DE MEMORIA
 // =============================================================================
+PAGE_SIZE :: 4 * mem.Kilobyte
+
+// ID único basado en la dirección directa de memoria
+Neuron_ID :: distinct uintptr
+
+Neuron_Pool :: struct {
+	base:            rawptr,
+	reserved_bytes:  uint,
+	committed_bytes: uint,
+	count:           uint,
+}
+
+pool_init :: proc(pool: ^Neuron_Pool, max_neurons: uint) -> bool {
+	pool.reserved_bytes = mem.align_forward_uint(max_neurons * size_of(Neuron), PAGE_SIZE)
+	buffer, err := virtual.reserve(pool.reserved_bytes)
+	if err != nil {
+		fmt.eprintln("Fallo al reservar espacio de memoria virtual:", err)
+		return false
+	}
+	pool.base = raw_data(buffer)
+	pool.committed_bytes = 0
+	pool.count = 0
+	return true
+}
+
+pool_destroy :: proc(pool: ^Neuron_Pool) {
+	if pool.base != nil {
+		virtual.release(pool.base, pool.reserved_bytes)
+		pool.base = nil
+	}
+}
+
+// Reserva una neurona y devuelve su puntero y su ID por posición de memoria
+pool_alloc_neuron :: proc(pool: ^Neuron_Pool) -> (^Neuron, Neuron_ID) {
+	needed_bytes := (pool.count + 1) * size_of(Neuron)
+
+	// Si superamos las páginas físicas actuales, confirmamos (commit) nuevas páginas
+	if needed_bytes > pool.committed_bytes {
+		bytes_to_commit := mem.align_forward_uint(needed_bytes - pool.committed_bytes, PAGE_SIZE)
+		commit_addr := rawptr(uintptr(pool.base) + uintptr(pool.committed_bytes))
+		err := virtual.commit(commit_addr, bytes_to_commit)
+		if err != nil {
+			fmt.eprintln("Error al hacer commit de páginas físicas:", err)
+			return nil, 0
+		}
+		pool.committed_bytes += bytes_to_commit
+	}
+
+	ptr := cast(^Neuron)(uintptr(pool.base) + uintptr(pool.count * size_of(Neuron)))
+	pool.count += 1
+
+	// La posición física de memoria es el identificador único O(1)
+	id := Neuron_ID(uintptr(ptr))
+	return ptr, id
+}
+
+// Acceso instantáneo a la neurona usando su ID
+get_neuron :: #force_inline proc(id: Neuron_ID) -> ^Neuron {
+	return cast(^Neuron)uintptr(id)
+}
+
+// =============================================================================
+// MAIN DE PRUEBA Y CONEXIÓN
+// =============================================================================
+main :: proc() {
+	// 1. Inicializamos pool con capacidad virtual para 100,000 neuronas
+	pool: Neuron_Pool
+	if !pool_init(&pool, 100_000) {
+		return
+	}
+	defer pool_destroy(&pool)
+
+	// 2. Inicializamos ECS
+	world := ecs.create_world()
+	defer ecs.delete_world(world)
+
+	// 3. Crear una Neurona asignando su memoria física bajo demanda
+	n1, id1 := pool_alloc_neuron(&pool)
+	n1.v_membrane = -70
+	n1.v_threshold = -55
+	n1.t_last = u32(time.duration_milliseconds(time.since(time.Time{}))) // Usando core:time
+
+	// Modificar flags de bitfield con core:math/bits
+	n1.bitfield = bits.bitfield_insert(n1.bitfield, u16(1), 0, 1) // Bit 0 activo
+
+	// 4. Registrar en el ECS como Entidad asociada a su ID de memoria
+	entity := ecs.add_entity(world, id1)
+
+	// 5. Lectura y verificación O(1) mediante el ID de memoria
+	recuperada := get_neuron(id1)
+	fmt.printfln("Neurona alojada en ID (Memoria): 0x%X", uintptr(id1))
+	fmt.printfln("Membrana: %d mV | Umbral: %d mV | Bitfield: 0x%04X", 
+		recuperada.v_membrane, recuperada.v_threshold, recuperada.bitfield)
+	fmt.printfln("Bytes físicos comiteados en RAM: %d KB", pool.committed_bytes / mem.Kilobyte)
+}
+
+// =============================================================================
+// CONTENEDOR DE RED (Con Memoria Virtual Paginada)
+// =============================================================================
+PAGE_SIZE :: 4 * mem.Kilobyte
+
 Network :: struct {
 	neurons:         []Neuron,
 	base_ptr:        uintptr,
@@ -82,12 +192,12 @@ Network :: struct {
 	target_sparsity: f32,
 }
 
-// Cálculo de índice relativo mediante aritmética de punteros en memoria
+// Cálculo de índice relativo mediante aritmética de punteros en memoria (O(1) puro)
 neuron_index_from_ptr :: #force_inline proc(net: ^Network, n_ptr: ^Neuron) -> int {
 	return int((uintptr(n_ptr) - net.base_ptr) / size_of(Neuron))
 }
 
-// Inicialización de la memoria contigua de la red
+// Inicialización con Memoria Virtual (reserve + commit por páginas de SO)
 init_network :: proc(neuron_count: int, sparsity: f32 = 0.0025) -> ^Network {
 	net := new(Network)
 	net.total_neurons   = neuron_count
@@ -97,16 +207,28 @@ init_network :: proc(neuron_count: int, sparsity: f32 = 0.0025) -> ^Network {
 	initial_capacity := int(f32(neuron_count) * sparsity * 2)
 	net.active_indices = make([dynamic]int, 0, initial_capacity)
 
-	total_bytes := neuron_count * size_of(Neuron)
-	raw_mem, err := mem.alloc(total_bytes, 64)
-	if err != nil {
-		fmt.panicf("Error al reservar memoria para la red: %v", err)
+	// Alineamos los bytes requeridos al tamaño de página del sistema (4 KB)
+	total_bytes := mem.align_forward_uint(uint(neuron_count * size_of(Neuron)), PAGE_SIZE)
+
+	// 1. Reserva del espacio virtual contiguo
+	buf, r_err := virtual.reserve(total_bytes)
+	if r_err != nil {
+		fmt.panicf("Error al reservar memoria virtual para la red: %v", r_err)
 	}
 
+	// 2. Confirmación (commit) de páginas físicas de RAM
+	c_err := virtual.commit(raw_data(buf), total_bytes)
+	if c_err != nil {
+		fmt.panicf("Error al comitear páginas físicas de memoria virtual: %v", c_err)
+	}
+
+	// La memoria virtual del SO siempre viene alineada a páginas (4096B),
+	// lo cual garantiza automáticamente la alineación de 64 bytes (línea de caché).
+	raw_mem := raw_data(buf)
 	net.neurons  = mem.slice_ptr(cast(^Neuron)raw_mem, neuron_count)
 	net.base_ptr = uintptr(raw_mem)
 
-	// Inicialización basal
+	// Inicialización basal (Valores originales intactos)
 	for i in 0..<neuron_count {
 		n := &net.neurons[i]
 
@@ -154,39 +276,17 @@ init_network :: proc(neuron_count: int, sparsity: f32 = 0.0025) -> ^Network {
 	return net
 }
 
+// Liberación del espacio de memoria virtual
 destroy_network :: proc(net: ^Network) {
 	if net == nil do return
 	delete(net.active_indices)
-	mem.free(rawptr(net.base_ptr))
+
+	total_bytes := mem.align_forward_uint(uint(net.total_neurons * size_of(Neuron)), PAGE_SIZE)
+	virtual.release(rawptr(net.base_ptr), total_bytes)
+
 	free(net)
 }
 
-// -----------------------------------------------------------------------------
-// INYECCIÓN DE ESTÍMULO (El Rayo que entra por Z = 0)
-// -----------------------------------------------------------------------------
-inject_input_pulse :: proc(net: ^Network, center_x, center_y: int, radius: int) {
-	injected_count := 0
-
-	for dx := -radius; dx <= radius; dx++ {
-		for dy := -radius; dy <= radius; dy++ {
-			x := center_x + dx
-			y := center_y + dy
-
-			if x >= 0 && x < GRID_DIM_X && y >= 0 && y < GRID_DIM_Y {
-				// Inyectamos en la cara de entrada Z = 0
-				idx := coord_to_index(x, y, 0)
-				n := &net.neurons[idx]
-
-				// Rompemos el umbral intencionalmente para forzar el disparo inicial
-				n.v_membrane = n.v_threshold + 10
-				append(&net.active_indices, idx)
-				injected_count += 1
-			}
-		}
-	}
-
-	fmt.printf("Descarga inyectada en Z=0: %d neuronas activadas como frente de onda.\n", injected_count)
-}
 
 // =============================================================================
 // MAIN: PUNTO DE ENTRADA Y BENCHMARK REAL
@@ -217,7 +317,7 @@ main :: proc() {
 
 	// 3. Ejecutar 40 ticks a través de loop.odin y medir la propagación
 	TOTAL_TICKS :: 40
-	fmt.Printf("\n[*] Simulando %d Ticks a través de loop.odin (Bi-Wave)...\n", TOTAL_TICKS)
+	fmt.printf("\n[*] Simulando %d Ticks a través de loop.odin (Bi-Wave)...\n", TOTAL_TICKS)
 	fmt.println("----------------------------------------------------------------------")
 	fmt.println(" Tick | Activas | Esparsidad | Profundidad Máx (Z) | Estado de Onda  ")
 	fmt.println("----------------------------------------------------------------------")
