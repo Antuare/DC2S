@@ -3,11 +3,9 @@ package main
 import "core:fmt"
 import "core:math"
 import "core:math/bits"
-import "core:math/linalg"
 import "core:mem"
 import virtual "core:mem/virtual"
 import "core:time"
-import ecs "odecs" // Busca la carpeta "odecs" relativa a main.odin
 
 CACHE_LINE_ALIGNMENT :: 64
 
